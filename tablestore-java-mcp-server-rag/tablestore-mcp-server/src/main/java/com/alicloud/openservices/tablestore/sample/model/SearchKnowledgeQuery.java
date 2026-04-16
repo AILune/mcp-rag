@@ -15,8 +15,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonClassDescription("The query request to search similar documents from knowledge store")
-public class SearchKnowledgeQuery
-{
+public class SearchKnowledgeQuery {
 
     @JsonProperty(required = true, value = "query")
     @JsonPropertyDescription("describe what you're looking for, and the tool will return the most relevant documents")
@@ -24,5 +23,5 @@ public class SearchKnowledgeQuery
 
     @JsonProperty(required = false, value = "size")
     @JsonPropertyDescription("the number of similar documents to be returned")
-    private int size = 20;
+    private int size = 5;
 }

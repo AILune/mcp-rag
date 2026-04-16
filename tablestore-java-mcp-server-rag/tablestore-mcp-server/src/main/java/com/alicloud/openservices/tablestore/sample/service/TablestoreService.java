@@ -55,14 +55,23 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-
 @Slf4j
 @Component
 public class TablestoreService implements Closeable {
+
+    /**
+     * 用于 embedding 向量的 JSON 序列化。
+     */
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+    /**
+     * 每个知识块的唯一标识，会写入元数据中，供混合检索融合时去重。
+     */
+    private static final String CHUNK_ID_KEY = "_chunk_id";
 
     private final SyncClient client;
     private final EmbeddingService embeddingService;
@@ -100,36 +109,57 @@ public class TablestoreService implements Closeable {
         init();
     }
 
+    /**
+     * 存知识块时自动补齐 chunk_id，便于后续多路召回结果做去重与融合。
+     */
     public void storeKnowledge(KnowledgeContent entry) {
         String id = UUID.randomUUID().toString();
-        addKnowledge(id, entry);
+        Map<String, Object> metadata = entry.getMetaData() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(entry.getMetaData());
+        metadata.putIfAbsent(CHUNK_ID_KEY, id);
+        addKnowledge(id, new KnowledgeContent(entry.getContent(), metadata));
     }
 
     public List<KnowledgeContent> searchKnowledge(SearchKnowledgeQuery request) {
-        String query = request.getQuery();
-        int size = request.getSize();
-        log.info("search knowledge query:[{}], size:{}", query, size);
-        float[] embedQuery = embeddingService.embed(query);
+        return searchKnowledgeByVector(request.getQuery(), request.getSize());
+    }
 
+    /**
+     * 底层向量召回能力，供 RagService 组合成混合检索流程。
+     */
+    public List<KnowledgeContent> searchKnowledgeByVector(String query, int size) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        int recallSize = normalizeSize(size);
+        log.info("search knowledge by vector query:[{}], size:{}", query, recallSize);
+        float[] embedQuery = embeddingService.embed(query);
         SearchQuery searchQuery = SearchQuery.newBuilder()
-                .query(QueryBuilders.bool()
-                        .should(QueryBuilders.knnVector(embeddingField, Math.min(1000, size + 100), embedQuery))
-                        //.should(QueryBuilders.match(textField, query)) // only vector search, later can try mix search
-                )
+                .query(QueryBuilders.knnVector(embeddingField, Math.min(1000, recallSize + 100), embedQuery))
                 .getTotalCount(false)
-                .limit(size)
+                .limit(recallSize)
                 .offset(0)
                 .sort(new Sort(Collections.singletonList(new ScoreSort())))
                 .build();
-        SearchRequest searchRequest = SearchRequest.newBuilder()
-                .tableName(knowledgeStore)
-                .indexName(knowledgeIndex)
-                .searchQuery(searchQuery)
-                .returnAllColumns(true)
+        return searchKnowledge(searchQuery);
+    }
+
+    /**
+     * 底层全文召回能力，使用 Tablestore 搜索索引上的 match 查询。
+     */
+    public List<KnowledgeContent> searchKnowledgeByText(String query, int size) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        int recallSize = normalizeSize(size);
+        log.info("search knowledge by text query:[{}], size:{}", query, recallSize);
+        SearchQuery searchQuery = SearchQuery.newBuilder()
+                .query(QueryBuilders.match(textField, query))
+                .getTotalCount(false)
+                .limit(recallSize)
+                .offset(0)
+                .sort(new Sort(Collections.singletonList(new ScoreSort())))
                 .build();
-        SearchResponse response = client.search(searchRequest);
-        log.info("search knowledge requestId:{}", response.getRequestId());
-        return searchResponseToKnowledgeContent(response);
+        return searchKnowledge(searchQuery);
     }
 
     public void storeFAQ(FAQContent entry) {
@@ -139,7 +169,7 @@ public class TablestoreService implements Closeable {
 
     public List<FAQContent> searchFAQ(SearchFAQQuery request) {
         String query = request.getQuery();
-        int size = request.getSize();
+        int size = normalizeSize(request.getSize());
         log.info("search faq:[{}], size:{}", query, size);
         float[] embedQuery = embeddingService.embed(query);
 
@@ -160,24 +190,31 @@ public class TablestoreService implements Closeable {
                 .returnAllColumns(true)
                 .build();
         SearchResponse response = client.search(searchRequest);
-        log.info("search requestId:{}", response.getRequestId());
+        log.info("search faq requestId:{}", response.getRequestId());
         return searchResponseToFAQContent(response);
     }
 
+    private List<KnowledgeContent> searchKnowledge(SearchQuery searchQuery) {
+        SearchRequest searchRequest = SearchRequest.newBuilder()
+                .tableName(knowledgeStore)
+                .indexName(knowledgeIndex)
+                .searchQuery(searchQuery)
+                .returnAllColumns(true)
+                .build();
+        SearchResponse response = client.search(searchRequest);
+        log.info("search knowledge requestId:{}", response.getRequestId());
+        return searchResponseToKnowledgeContent(response);
+    }
 
     private List<KnowledgeContent> searchResponseToKnowledgeContent(SearchResponse response) {
         List<SearchHit> searchHits = response.getSearchHits();
         List<KnowledgeContent> matches = new ArrayList<>(searchHits.size());
         for (SearchHit hit : searchHits) {
-            Double score = hit.getScore();
-            // 如果对分数有要求，可以这里进行限制.
             Row row = hit.getRow();
-
             String text = "";
             if (row.getLatestColumn(textField) != null) {
                 text = row.getLatestColumn(textField).getValue().asString();
             }
-
             Map<String, Object> metaData = rowToMetadata(row);
             matches.add(new KnowledgeContent(text, metaData));
         }
@@ -188,17 +225,12 @@ public class TablestoreService implements Closeable {
         List<SearchHit> searchHits = response.getSearchHits();
         List<FAQContent> matches = new ArrayList<>(searchHits.size());
         for (SearchHit hit : searchHits) {
-            Double score = hit.getScore();
-            // 如果对分数有要求，可以这里进行限制.
             Row row = hit.getRow();
-
             String text = "";
             if (row.getLatestColumn(textField) != null) {
                 text = row.getLatestColumn(textField).getValue().asString();
             }
-
             String answer = row.getLatestColumn(faqAnswerFieldName).getValue().asString();
-
             matches.add(new FAQContent(text, answer));
         }
         return matches;
@@ -234,10 +266,8 @@ public class TablestoreService implements Closeable {
     private void init() {
         createTableIfNotExist(knowledgeStore);
         createSearchIndexIfNotExist(knowledgeStore, knowledgeIndex);
-
         createTableIfNotExist(faqStore);
         createSearchIndexIfNotExist(faqStore, faqIndex);
-
         checkEmbeddingDimension();
         checkSchemaDimension(knowledgeStore, knowledgeIndex);
         checkSchemaDimension(faqStore, faqIndex);
@@ -380,10 +410,8 @@ public class TablestoreService implements Closeable {
         }
     }
 
-    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-
-    private static float[] parseEmbeddingString(String embeddingString) {
-        return JSON_MAPPER.convertValue(embeddingString, float[].class);
+    private int normalizeSize(int size) {
+        return size <= 0 ? 5 : size;
     }
 
     private static String embeddingToString(float[] embedding) {

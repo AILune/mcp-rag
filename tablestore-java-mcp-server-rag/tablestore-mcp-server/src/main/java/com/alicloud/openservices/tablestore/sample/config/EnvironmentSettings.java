@@ -38,7 +38,6 @@ public class EnvironmentSettings {
         return envOrDefault("TABLESTORE_FAQ_INDEX_NAME", "index");
     }
 
-
     public static String getTablePkName() {
         return envOrDefault("TABLESTORE_TABLE_PK_NAME", "id");
     }
@@ -52,11 +51,54 @@ public class EnvironmentSettings {
     }
 
     public static String getEmbeddingModelName() {
-        return envOrDefault("EMBEDDING_MODEL_NAME", "ai.djl.huggingface.rust/BAAI/bge-base-en-v1.5/0.0.1/bge-base-en-v1.5");
+        return envOrDefault("EMBEDDING_MODEL_NAME", "ai.djl.huggingface.rust/BAAI/bge-base-zh-v1.5/0.0.1/bge-base-zh-v1.5");
     }
 
     public static String getFAQAnswerFieldName() {
         return envOrDefault("TABLESTORE_FAQ_ANSWER_FIELD", "_answer");
+    }
+
+    public static int getChunkSize() {
+        return envOrDefault("TABLESTORE_CHUNK_SIZE", 700);
+    }
+
+    public static int getChunkOverlap() {
+        return envOrDefault("TABLESTORE_CHUNK_OVERLAP", 120);
+    }
+
+    public static int getVectorRecallSize() {
+        return envOrDefault("TABLESTORE_VECTOR_RECALL_SIZE", 10);
+    }
+
+    public static int getBm25RecallSize() {
+        return envOrDefault("TABLESTORE_BM25_RECALL_SIZE", 10);
+    }
+
+    public static int getRrfFusedSize() {
+        return envOrDefault("TABLESTORE_RRF_FUSED_SIZE", 5);
+    }
+
+    public static int getRrfK() {
+        return envOrDefault("TABLESTORE_RRF_K", 60);
+    }
+
+    public static int getRerankSize() {
+        return envOrDefault("TABLESTORE_RERANK_SIZE", 3);
+    }
+
+    public static String getLocalRerankModelPath() {
+        return envOrDefault("LOCAL_RERANK_MODEL_PATH", "D:/models/BAAI/bge-reranker-v2-m3");
+    }
+
+    public static String getLocalRerankEngine() {
+        return envOrDefault("LOCAL_RERANK_ENGINE", "Rust");
+    }
+
+    /**
+     * 仅用于日志或对外说明当前使用的 rerank 模型名称。
+     */
+    public static String getRerankModelName() {
+        return envOrDefault("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3");
     }
 
     private static String envOrDefault(String envName, String defaultValue) {
@@ -75,6 +117,14 @@ public class EnvironmentSettings {
         return Integer.parseInt(env);
     }
 
+    private static double envOrDefault(String envName, double defaultValue) {
+        String env = System.getenv(envName);
+        if (env == null || env.isBlank()) {
+            return defaultValue;
+        }
+        return Double.parseDouble(env);
+    }
+
     private static String envSafe(String envName) {
         String env = System.getenv(envName);
         if (env == null || env.isBlank()) {
@@ -82,5 +132,4 @@ public class EnvironmentSettings {
         }
         return env;
     }
-
 }
