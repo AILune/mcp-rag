@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(D:/AI Coding/alibabacloud-tablestore-mcp-server/tablestore-java-mcp-server-rag/tablestore-mcp-server/mvnw test *)",
+      "Bash(mvn *)",
+      "Bash(where java *)",
+      "Bash(jar tf *)",
+      "Bash(javap *)",
+      "Bash(D:/Java/jdk-17.0.13/bin/javac -encoding UTF-8 -cp 'target/classes;__CMDSUB_OUTPUT__' -d target/test-classes target/RerankLoadProbe.java)",
+      "Bash(D:/Java/jdk-17.0.13/bin/java -cp 'target/test-classes;target/classes;__CMDSUB_OUTPUT__' RerankLoadProbe)",
+      "Bash(D:/Java/jdk-17.0.13/bin/javac -encoding UTF-8 -cp 'target/classes;__CMDSUB_OUTPUT__' -d target/test-classes target/EmbeddingLoadProbe.java)",
+      "Bash(D:/Java/jdk-17.0.13/bin/java -cp 'target/test-classes;target/classes;__CMDSUB_OUTPUT__' EmbeddingLoadProbe)",
+      "Bash(\"D:/Java/jdk-17.0.13/bin/jar\" tf *)",
+      "Bash(python *)",
+      "Bash(\"D:/Java/jdk-17.0.13/bin/javap\" -classpath \"C:/Users/85448/.m2/repository/ai/djl/pytorch/pytorch-engine/0.32.0/pytorch-engine-0.32.0.jar\" -c ai.djl.pytorch.jni.LibUtils)",
+      "Bash(\"D:/Java/jdk-17.0.13/bin/javap\" -classpath \"C:/Users/85448/.m2/repository/ai/djl/pytorch/pytorch-engine/0.32.0/pytorch-engine-0.32.0.jar\" -c -private ai.djl.pytorch.jni.LibUtils)",
+      "Bash(export JAVA_HOME=\"D:/Java/jdk-17.0.13\")",
+      "Bash(export PATH=\"$JAVA_HOME/bin:$PATH\")"
+    ]
+  }
+}
